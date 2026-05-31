@@ -211,7 +211,7 @@
 const GAS_API_URL = 'https://line-tomato-proxy.gohatch4io.workers.dev'; // Cloudflare Worker経由でCORSを解決
 const LIFF_ID = '2010240875-8G6TnbBM'; // LINEログインチャンネルで発行したLIFF ID
 
-let idToken = null; // LINEログインで取得するIDトークン（GASへ送り認証に使う）
+let accessToken = null; // LINEログインで取得するアクセストークン（GASへ送り認証に使う）
 
 const LOCATIONS = {
   ippan:  ['あやめの里', 'あじわいの朝', '山の駅くりこま', 'おかってマルシェ', '元気くん市場'],
@@ -252,12 +252,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    // IDトークン（署名付き。GAS側で本物か検証する）を取得
-    idToken = liff.getIDToken();
-
-    // トークンが無い／期限切れなら、ログインし直して新しいトークンを取得する
-    // （LINEアプリ内ブラウザは古いトークンを使い回すため、この対策が必要）
-    if (!idToken || isTokenExpired(idToken)) {
+    // アクセストークン（GAS側でLINEに問い合わせて本人確認する）を取得
+    accessToken = liff.getAccessToken();
+    if (!accessToken) {
       liff.login({ redirectUri: cleanUri });
       return;
     }
@@ -300,7 +297,8 @@ async function loadInventory() {
   content.innerHTML = '<div class="loading">データを読み込み中...</div>';
 
   try {
-    const res = await fetch(`${GAS_API_URL}?action=getAll&idToken=${encodeURIComponent(idToken)}&month=${selectedMonth}&day=${selectedDay}`);
+    refreshToken();
+    const res = await fetch(`${GAS_API_URL}?action=getAll&accessToken=${encodeURIComponent(accessToken)}&month=${selectedMonth}&day=${selectedDay}`);
     const json = await res.json();
     if (json.error) throw new Error(json.error);
     inventoryData = json.data;
@@ -370,14 +368,11 @@ function encodeId(str) {
   return str.replace(/\s/g, '_').replace(/[^\w]/g, 'X');
 }
 
-// IDトークン（JWT）の有効期限をチェック。期限切れ or 残り60秒未満ならtrue
-function isTokenExpired(token) {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    if (!payload.exp) return true;
-    return (Date.now() / 1000) >= (payload.exp - 60);
-  } catch (e) {
-    return true; // 解析できないトークンは無効扱い
+// アクセストークンを最新化（LINEアプリ内で開いている間はSDKが保持している）
+function refreshToken() {
+  if (typeof liff !== 'undefined' && liff.isLoggedIn && liff.isLoggedIn()) {
+    const t = liff.getAccessToken();
+    if (t) accessToken = t;
   }
 }
 
@@ -411,10 +406,11 @@ async function saveValue(type, location, tomatoType, inputId, btn) {
   btn.textContent = '保存中';
 
   try {
+    refreshToken();
     const res = await fetch(GAS_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'update', idToken, type, tomatoType, location, count, month: selectedMonth, day: selectedDay }),
+      body: JSON.stringify({ action: 'update', accessToken, type, tomatoType, location, count, month: selectedMonth, day: selectedDay }),
     });
     const json = await res.json();
     if (json.error) throw new Error(json.error);
