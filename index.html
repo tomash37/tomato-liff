@@ -243,16 +243,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     await liff.init({ liffId: LIFF_ID });
 
+    // ログインに戻ってくる先（?code= などの余計なクエリを残さないURL）
+    const cleanUri = window.location.origin + window.location.pathname;
+
     // 未ログインならLINEログイン画面へ（戻ってくると以降の処理が走る）
     if (!liff.isLoggedIn()) {
-      liff.login({ redirectUri: window.location.href });
+      liff.login({ redirectUri: cleanUri });
       return;
     }
 
     // IDトークン（署名付き。GAS側で本物か検証する）を取得
     idToken = liff.getIDToken();
-    if (!idToken) {
-      content.innerHTML = '<div class="error-msg">ログイン情報を取得できませんでした。LINEアプリ内で開き直してください。</div>';
+
+    // トークンが無い／期限切れなら、ログインし直して新しいトークンを取得する
+    // （LINEアプリ内ブラウザは古いトークンを使い回すため、この対策が必要）
+    if (!idToken || isTokenExpired(idToken)) {
+      liff.login({ redirectUri: cleanUri });
       return;
     }
   } catch (err) {
@@ -362,6 +368,17 @@ function renderCards() {
 // =============================================
 function encodeId(str) {
   return str.replace(/\s/g, '_').replace(/[^\w]/g, 'X');
+}
+
+// IDトークン（JWT）の有効期限をチェック。期限切れ or 残り60秒未満ならtrue
+function isTokenExpired(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (!payload.exp) return true;
+    return (Date.now() / 1000) >= (payload.exp - 60);
+  } catch (e) {
+    return true; // 解析できないトークンは無効扱い
+  }
 }
 
 function toggleDetail(header, loc, type) {
