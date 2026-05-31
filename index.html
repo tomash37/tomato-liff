@@ -192,7 +192,7 @@
 <header>
   <span style="font-size:22px">🍅</span>
   <h1>トマト在庫管理</h1>
-  <span class="date" id="dateLabel"></span>
+  <input type="date" id="datePicker" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.5);border-radius:6px;color:white;padding:4px 8px;font-size:13px;cursor:pointer;" onchange="onDateChange()">
 </header>
 
 <div class="tabs">
@@ -218,21 +218,38 @@ const LOCATIONS = {
 
 let currentTab = 'ippan';
 let inventoryData = {};
+let selectedMonth = null;
+let selectedDay = null;
 
 // =============================================
 // 初期化
 // =============================================
 document.addEventListener('DOMContentLoaded', async () => {
-  // 日付表示
+  // 今日の日付をデフォルトに設定
   const now = new Date();
-  document.getElementById('dateLabel').textContent =
-    `${now.getMonth()+1}月${now.getDate()}日`;
+  selectedMonth = now.getMonth() + 1;
+  selectedDay   = now.getDate();
 
-  // LIFF初期化（LIFF IDが設定されていれば）
-  // await liff.init({ liffId: 'YOUR_LIFF_ID' });
+  // 日付ピッカーに今日をセット
+  const yyyy = now.getFullYear();
+  const mm   = String(now.getMonth() + 1).padStart(2, '0');
+  const dd   = String(now.getDate()).padStart(2, '0');
+  document.getElementById('datePicker').value = `${yyyy}-${mm}-${dd}`;
 
   loadInventory();
 });
+
+// =============================================
+// 日付変更
+// =============================================
+function onDateChange() {
+  const val = document.getElementById('datePicker').value; // "2026-05-31"
+  if (!val) return;
+  const parts = val.split('-');
+  selectedMonth = parseInt(parts[1], 10);
+  selectedDay   = parseInt(parts[2], 10);
+  loadInventory();
+}
 
 // =============================================
 // タブ切替
@@ -253,7 +270,7 @@ async function loadInventory() {
   content.innerHTML = '<div class="loading">データを読み込み中...</div>';
 
   try {
-    const res = await fetch(`${GAS_API_URL}?action=getAll&apiKey=${API_KEY}`);
+    const res = await fetch(`${GAS_API_URL}?action=getAll&apiKey=${API_KEY}&month=${selectedMonth}&day=${selectedDay}`);
     const json = await res.json();
     if (json.error) throw new Error(json.error);
     inventoryData = json.data;
@@ -356,7 +373,7 @@ async function saveValue(type, location, tomatoType, inputId, btn) {
     const res = await fetch(GAS_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'update', apiKey: API_KEY, type, tomatoType, location, count }),
+      body: JSON.stringify({ action: 'update', apiKey: API_KEY, type, tomatoType, location, count, month: selectedMonth, day: selectedDay }),
     });
     const json = await res.json();
     if (json.error) throw new Error(json.error);
