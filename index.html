@@ -209,7 +209,9 @@
 // 設定
 // =============================================
 const GAS_API_URL = 'https://line-tomato-proxy.gohatch4io.workers.dev'; // Cloudflare Worker経由でCORSを解決
-const API_KEY = '63mV4QctYLwSbE'; // GASのスクリプトプロパティ LIFF_API_KEY と同じ値
+const LIFF_ID = '2010240875-8G6TnbBM'; // LINEログインチャンネルで発行したLIFF ID
+
+let idToken = null; // LINEログインで取得するIDトークン（GASへ送り認証に使う）
 
 const LOCATIONS = {
   ippan:  ['あやめの里', 'あじわいの朝', '山の駅くりこま', 'おかってマルシェ', '元気くん市場'],
@@ -235,6 +237,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   const mm   = String(now.getMonth() + 1).padStart(2, '0');
   const dd   = String(now.getDate()).padStart(2, '0');
   document.getElementById('datePicker').value = `${yyyy}-${mm}-${dd}`;
+
+  // --- LINEログイン認証 ---
+  const content = document.getElementById('mainContent');
+  try {
+    await liff.init({ liffId: LIFF_ID });
+
+    // 未ログインならLINEログイン画面へ（戻ってくると以降の処理が走る）
+    if (!liff.isLoggedIn()) {
+      liff.login({ redirectUri: window.location.href });
+      return;
+    }
+
+    // IDトークン（署名付き。GAS側で本物か検証する）を取得
+    idToken = liff.getIDToken();
+    if (!idToken) {
+      content.innerHTML = '<div class="error-msg">ログイン情報を取得できませんでした。LINEアプリ内で開き直してください。</div>';
+      return;
+    }
+  } catch (err) {
+    content.innerHTML = `<div class="error-msg">ログインの初期化に失敗しました。<br>${err.message}</div>`;
+    return;
+  }
 
   loadInventory();
 });
@@ -270,7 +294,7 @@ async function loadInventory() {
   content.innerHTML = '<div class="loading">データを読み込み中...</div>';
 
   try {
-    const res = await fetch(`${GAS_API_URL}?action=getAll&apiKey=${API_KEY}&month=${selectedMonth}&day=${selectedDay}`);
+    const res = await fetch(`${GAS_API_URL}?action=getAll&idToken=${encodeURIComponent(idToken)}&month=${selectedMonth}&day=${selectedDay}`);
     const json = await res.json();
     if (json.error) throw new Error(json.error);
     inventoryData = json.data;
@@ -373,7 +397,7 @@ async function saveValue(type, location, tomatoType, inputId, btn) {
     const res = await fetch(GAS_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'update', apiKey: API_KEY, type, tomatoType, location, count, month: selectedMonth, day: selectedDay }),
+      body: JSON.stringify({ action: 'update', idToken, type, tomatoType, location, count, month: selectedMonth, day: selectedDay }),
     });
     const json = await res.json();
     if (json.error) throw new Error(json.error);
