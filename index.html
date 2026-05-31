@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>トマト在庫管理</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #e74c3c;
+      color: white;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+    header h1 { font-size: 17px; font-weight: bold; flex: 1; }
+    header .date { font-size: 13px; opacity: 0.9; }
+
+    .tabs {
+      display: flex;
+      background: white;
+      border-bottom: 2px solid #e74c3c;
+    }
+    .tab {
+      flex: 1;
+      padding: 12px;
+      text-align: center;
+      font-size: 15px;
+      font-weight: bold;
+      color: #999;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab.active {
+      color: #e74c3c;
+      border-bottom: 3px solid #e74c3c;
+      margin-bottom: -2px;
+    }
+
+    .content { padding: 12px; }
+
+    .location-card {
+      background: white;
+      border-radius: 12px;
+      margin-bottom: 10px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .location-header {
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    .location-name { font-size: 15px; font-weight: bold; }
+    .location-summary { font-size: 13px; color: #888; }
+    .残数-badge {
+      background: #fff3f3;
+      color: #e74c3c;
+      font-weight: bold;
+      font-size: 14px;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+    .残数-badge.zero { background: #f0f0f0; color: #aaa; }
+
+    .location-detail {
+      display: none;
+      padding: 0 16px 16px;
+      border-top: 1px solid #f0f0f0;
+    }
+    .location-detail.open { display: block; }
+
+    .input-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .input-label {
+      font-size: 13px;
+      color: #666;
+      width: 50px;
+      flex-shrink: 0;
+    }
+    .num-control {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+    }
+    .num-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+    .num-btn.minus { background: #f0f0f0; color: #666; }
+    .num-btn.plus  { background: #e74c3c; color: white; }
+    .num-btn:active { opacity: 0.7; transform: scale(0.93); }
+    .num-input {
+      flex: 1;
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 6px;
+      width: 60px;
+    }
+    .save-btn {
+      background: #27ae60;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: bold;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .save-btn:active { opacity: 0.7; }
+    .save-btn:disabled { background: #ccc; cursor: default; }
+
+    .saved-indicator {
+      font-size: 12px;
+      color: #27ae60;
+      text-align: right;
+      margin-top: 4px;
+      height: 16px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+      font-size: 15px;
+    }
+    .error-msg {
+      background: #fff3f3;
+      color: #e74c3c;
+      border-radius: 8px;
+      padding: 12px;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+    .reload-btn {
+      display: block;
+      margin: 16px auto 0;
+      background: #e74c3c;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 24px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .chevron {
+      font-size: 12px;
+      color: #ccc;
+      transition: transform 0.2s;
+    }
+    .location-header.open .chevron { transform: rotate(90deg); }
+  </style>
+</head>
+<body>
+
+<header>
+  <span style="font-size:22px">🍅</span>
+  <h1>トマト在庫管理</h1>
+  <span class="date" id="dateLabel"></span>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('ippan')">一般トマト</div>
+  <div class="tab" onclick="switchTab('konodo')">高濃度トマト</div>
+</div>
+
+<div class="content" id="mainContent">
+  <div class="loading">データを読み込み中...</div>
+</div>
+
+<script>
+// =============================================
+// 設定
+// =============================================
+const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyb30tSWGWYwKz1ggLGLPqueHd9KqvYSznrNOK4qbbzahXMwD740ptSbXeSj1ra1cJi/exec'; // 例: https://script.google.com/macros/s/XXXX/exec
+const API_KEY = '!B&5gJLHxR2jEG'; // GASのスクリプトプロパティ LIFF_API_KEY と同じ値
+
+const LOCATIONS = {
+  ippan:  ['あやめの里', 'あじわいの朝', '山の駅くりこま', 'おかってマルシェ', '元気くん市場'],
+  konodo: ['あやめの里', 'あじわいの朝', '山の駅くりこま', 'おかってマルシェ', 'くりでん直売所', 'あじわいの朝 若柳'],
+};
+
+let currentTab = 'ippan';
+let inventoryData = {};
+
+// =============================================
+// 初期化
+// =============================================
+document.addEventListener('DOMContentLoaded', async () => {
+  // 日付表示
+  const now = new Date();
+  document.getElementById('dateLabel').textContent =
+    `${now.getMonth()+1}月${now.getDate()}日`;
+
+  // LIFF初期化（LIFF IDが設定されていれば）
+  // await liff.init({ liffId: 'YOUR_LIFF_ID' });
+
+  loadInventory();
+});
+
+// =============================================
+// タブ切替
+// =============================================
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach((el, i) => {
+    el.classList.toggle('active', (i === 0 && tab === 'ippan') || (i === 1 && tab === 'konodo'));
+  });
+  renderCards();
+}
+
+// =============================================
+// 在庫データ読み込み
+// =============================================
+async function loadInventory() {
+  const content = document.getElementById('mainContent');
+  content.innerHTML = '<div class="loading">データを読み込み中...</div>';
+
+  try {
+    const res = await fetch(`${GAS_API_URL}?action=getAll&apiKey=${API_KEY}`);
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    inventoryData = json.data;
+    renderCards();
+  } catch (err) {
+    content.innerHTML = `
+      <div class="error-msg">データの読み込みに失敗しました。<br>${err.message}</div>
+      <button class="reload-btn" onclick="loadInventory()">再読み込み</button>
+    `;
+  }
+}
+
+// =============================================
+// カード描画
+// =============================================
+function renderCards() {
+  const locations = LOCATIONS[currentTab];
+  const type = currentTab === 'ippan' ? '一般' : '高濃度';
+  const content = document.getElementById('mainContent');
+
+  content.innerHTML = locations.map(loc => {
+    const key = `${type}_${loc}`;
+    const d = inventoryData[key] || { nohin: 0, zaiko: 0, hanbai: 0, zansu: 0 };
+    const badgeClass = d.zansu <= 0 ? 'zero' : '';
+    return `
+      <div class="location-card">
+        <div class="location-header" onclick="toggleDetail(this, '${loc}', '${type}')">
+          <div>
+            <div class="location-name">${loc}</div>
+            <div class="location-summary">納品:${d.nohin} 在庫:${d.zaiko} 販売:${d.hanbai}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="残数-badge ${badgeClass}">残${d.zansu}</span>
+            <span class="chevron">▶</span>
+          </div>
+        </div>
+        <div class="location-detail" id="detail_${encodeId(loc)}_${type}">
+          <div class="input-row">
+            <span class="input-label">納品数</span>
+            <div class="num-control">
+              <button class="num-btn minus" onclick="changeVal('nohin_${encodeId(loc)}_${type}', -1)">−</button>
+              <input class="num-input" type="number" id="nohin_${encodeId(loc)}_${type}" value="${d.nohin}" min="0">
+              <button class="num-btn plus"  onclick="changeVal('nohin_${encodeId(loc)}_${type}', 1)">＋</button>
+            </div>
+            <button class="save-btn" onclick="saveValue('納品', '${loc}', '${type}', 'nohin_${encodeId(loc)}_${type}', this)">保存</button>
+          </div>
+          <div class="input-row">
+            <span class="input-label">販売数</span>
+            <div class="num-control">
+              <button class="num-btn minus" onclick="changeVal('hanbai_${encodeId(loc)}_${type}', -1)">−</button>
+              <input class="num-input" type="number" id="hanbai_${encodeId(loc)}_${type}" value="${d.hanbai}" min="0">
+              <button class="num-btn plus"  onclick="changeVal('hanbai_${encodeId(loc)}_${type}', 1)">＋</button>
+            </div>
+            <button class="save-btn" onclick="saveValue('販売', '${loc}', '${type}', 'hanbai_${encodeId(loc)}_${type}', this)">保存</button>
+          </div>
+          <div class="saved-indicator" id="saved_${encodeId(loc)}_${type}"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// =============================================
+// ユーティリティ
+// =============================================
+function encodeId(str) {
+  return str.replace(/\s/g, '_').replace(/[^\w]/g, 'X');
+}
+
+function toggleDetail(header, loc, type) {
+  const detailId = `detail_${encodeId(loc)}_${type}`;
+  const detail = document.getElementById(detailId);
+  const isOpen = detail.classList.contains('open');
+  // 全部閉じる
+  document.querySelectorAll('.location-detail').forEach(el => el.classList.remove('open'));
+  document.querySelectorAll('.location-header').forEach(el => el.classList.remove('open'));
+  if (!isOpen) {
+    detail.classList.add('open');
+    header.classList.add('open');
+  }
+}
+
+function changeVal(inputId, delta) {
+  const input = document.getElementById(inputId);
+  const newVal = Math.max(0, (parseInt(input.value) || 0) + delta);
+  input.value = newVal;
+}
+
+// =============================================
+// 保存処理
+// =============================================
+async function saveValue(type, location, tomatoType, inputId, btn) {
+  const count = parseInt(document.getElementById(inputId).value);
+  if (isNaN(count) || count < 0) return;
+
+  btn.disabled = true;
+  btn.textContent = '保存中';
+
+  try {
+    const res = await fetch(GAS_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update', apiKey: API_KEY, type, tomatoType, location, count }),
+    });
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+
+    // バッジ更新
+    inventoryData[`${tomatoType}_${location}`] = json.data;
+    const savedEl = document.getElementById(`saved_${encodeId(location)}_${tomatoType}`);
+    if (savedEl) { savedEl.textContent = '✅ 保存しました'; setTimeout(() => { savedEl.textContent = ''; }, 2000); }
+
+    // カードのサマリーを更新
+    renderCards();
+    // 保存したカードを再展開
+    setTimeout(() => {
+      const header = document.querySelector(`#detail_${encodeId(location)}_${tomatoType}`)?.previousElementSibling;
+      if (header) toggleDetail(header, location, tomatoType);
+    }, 50);
+
+  } catch (err) {
+    alert(`保存に失敗しました: ${err.message}`);
+    btn.disabled = false;
+    btn.textContent = '保存';
+  }
+}
+</script>
+</body>
+</html>
